@@ -113,63 +113,9 @@ RCT_ENUM_CONVERTER(UIUserNotificationActionBehavior, (@{
 }
 @end
 
-@implementation RCTConvert (UNNotificationRequest)
-+ (UNNotificationRequest *)UNNotificationRequest:(id)json withId:(NSString*)notificationId
-{
-    NSDictionary<NSString *, id> *details = [self NSDictionary:json];
-
-    UNMutableNotificationContent *content = [UNMutableNotificationContent new];
-    content.body = [RCTConvert NSString:details[@"alertBody"]];
-    content.title = [RCTConvert NSString:details[@"alertTitle"]];
-    content.sound = [RCTConvert NSString:details[@"soundName"]]
-        ? [UNNotificationSound soundNamed:[RCTConvert NSString:details[@"soundName"]]]
-        : [UNNotificationSound defaultSound];
-    if ([RCTConvert BOOL:details[@"silent"]]) {
-        content.sound = nil;
-    }
-    content.userInfo = [RCTConvert NSDictionary:details[@"userInfo"]] ?: @{};
-    content.categoryIdentifier = [RCTConvert NSString:details[@"category"]];
-
-    NSDate *triggerDate = [RCTConvert NSDate:details[@"fireDate"]];
-    UNCalendarNotificationTrigger *trigger = nil;
-    if (triggerDate != nil) {
-        NSDateComponents *triggerDateComponents = [[NSCalendar currentCalendar]
-                                                   components:NSCalendarUnitYear +
-                                                   NSCalendarUnitMonth + NSCalendarUnitDay +
-                                                   NSCalendarUnitHour + NSCalendarUnitMinute +
-                                                   NSCalendarUnitSecond + NSCalendarUnitTimeZone
-                                                   fromDate:triggerDate];
-        trigger = [UNCalendarNotificationTrigger triggerWithDateMatchingComponents:triggerDateComponents
-                                                                           repeats:NO];
-    }
-
-    return [UNNotificationRequest requestWithIdentifier:notificationId
-                                                content:content trigger:trigger];
-}
+@interface RNNotifications ()
+@property (nonatomic, strong) NSMutableDictionary *notificationCallbacks;
 @end
-
-static NSDictionary *RCTFormatUNNotification(UNNotification *notification)
-{
-  NSMutableDictionary *formattedNotification = [NSMutableDictionary dictionary];
-  UNNotificationContent *content = notification.request.content;
-
-  formattedNotification[@"identifier"] = notification.request.identifier;
-
-  if (notification.date) {
-    NSDateFormatter *formatter = [NSDateFormatter new];
-    [formatter setDateFormat:@"yyyy-MM-dd'T'HH:mm:ss.SSSZZZZZ"];
-    NSString *dateString = [formatter stringFromDate:notification.date];
-    formattedNotification[@"fireDate"] = dateString;
-  }
-
-  formattedNotification[@"alertTitle"] = RCTNullIfNil(content.title);
-  formattedNotification[@"alertBody"] = RCTNullIfNil(content.body);
-  formattedNotification[@"category"] = RCTNullIfNil(content.categoryIdentifier);
-  formattedNotification[@"thread-id"] = RCTNullIfNil(content.threadIdentifier);
-  formattedNotification[@"userInfo"] = RCTNullIfNil(RCTJSONClean(content.userInfo));
-
-  return formattedNotification;
-}
 
 @implementation RNNotifications
 
@@ -251,6 +197,22 @@ RCT_EXPORT_MODULE()
 
 + (void)didReceiveRemoteNotification:(NSDictionary *)notification
 {
+    [self didReceiveRemoteNotification:notification fetchCompletionHandler:nil];
+}
+
++ (void)didReceiveRemoteNotification:(NSDictionary *)notification
+    fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler
+{
+    NSDictionary* data = notification;
+    if (completionHandler != nil) {
+        NSMutableDictionary* copy = [[NSMutableDictionary alloc] initWithDictionary: data];
+        NSString *completionHandlerId = [[NSUUID UUID] UUIDString];
+        copy[@"_completionHandlerId"] = completionHandlerId;
+        data = copy;
+        [[RNNotificationsBridgeQueue sharedInstance] postFetchHandler:data completionKey:completionHandlerId
+            fetchCompletionHandler:completionHandler];
+    }
+    
     UIApplicationState state = [UIApplication sharedApplication].applicationState;
 
     if ([RNNotificationsBridgeQueue sharedInstance].jsIsReady == YES) {
@@ -258,17 +220,17 @@ RCT_EXPORT_MODULE()
 
         if (state == UIApplicationStateActive) {
             // Notification received foreground
-            [self didReceiveNotificationOnForegroundState:notification];
+            [self didReceiveNotificationOnForegroundState:data];
         } else if (state == UIApplicationStateInactive) {
             // Notification opened
-            [self didNotificationOpen:notification];
+            [self didNotificationOpen:data];
         } else {
             // Notification received background
-            [self didReceiveNotificationOnBackgroundState:notification];
+            [self didReceiveNotificationOnBackgroundState:data];
         }
     } else {
         // JS thread is not ready - store it in the native notifications queue
-        [[RNNotificationsBridgeQueue sharedInstance] postNotification:notification];
+        [[RNNotificationsBridgeQueue sharedInstance] postNotification:data];
     }
 }
 
@@ -529,6 +491,17 @@ RCT_EXPORT_METHOD(log:(NSString *)message)
 RCT_EXPORT_METHOD(completionHandler:(NSString *)completionKey)
 {
     [[RNNotificationsBridgeQueue sharedInstance] completeAction:completionKey];
+}
+
+RCT_EXPORT_METHOD(finishRemoteNotification:(NSString *)completionKey fetchResult:(NSString*) result)
+{
+    UIBackgroundFetchResult bgResult = UIBackgroundFetchResultNoData;
+    if ([@"NewData" isEqualToString:result]) {
+        bgResult = UIBackgroundFetchResultNewData;
+    } else if ([@"Failed" isEqualToString:result]) {
+        bgResult = UIBackgroundFetchResultFailed;
+    }
+    [[RNNotificationsBridgeQueue sharedInstance] completeFetch:completionKey fetchResult:bgResult];
 }
 
 RCT_EXPORT_METHOD(abandonPermissions)

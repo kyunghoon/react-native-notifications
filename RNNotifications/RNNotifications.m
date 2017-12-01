@@ -113,6 +113,41 @@ RCT_ENUM_CONVERTER(UIUserNotificationActionBehavior, (@{
 }
 @end
 
+@implementation RCTConvert (UNNotificationRequest)
++ (UNNotificationRequest *)UNNotificationRequest:(id)json withId:(NSString*)notificationId
+{
+    NSDictionary<NSString *, id> *details = [self NSDictionary:json];
+
+    UNMutableNotificationContent *content = [UNMutableNotificationContent new];
+    content.body = [RCTConvert NSString:details[@"alertBody"]];
+    content.title = [RCTConvert NSString:details[@"alertTitle"]];
+    content.sound = [RCTConvert NSString:details[@"soundName"]]
+    ? [UNNotificationSound soundNamed:[RCTConvert NSString:details[@"soundName"]]]
+    : [UNNotificationSound defaultSound];
+    if ([RCTConvert BOOL:details[@"silent"]]) {
+        content.sound = nil;
+    }
+    content.userInfo = [RCTConvert NSDictionary:details[@"userInfo"]] ?: @{};
+    content.categoryIdentifier = [RCTConvert NSString:details[@"category"]];
+
+    NSDate *triggerDate = [RCTConvert NSDate:details[@"fireDate"]];
+    UNCalendarNotificationTrigger *trigger = nil;
+    if (triggerDate != nil) {
+        NSDateComponents *triggerDateComponents = [[NSCalendar currentCalendar]
+                                                   components:NSCalendarUnitYear +
+                                                   NSCalendarUnitMonth + NSCalendarUnitDay +
+                                                   NSCalendarUnitHour + NSCalendarUnitMinute +
+                                                   NSCalendarUnitSecond + NSCalendarUnitTimeZone
+                                                   fromDate:triggerDate];
+        trigger = [UNCalendarNotificationTrigger triggerWithDateMatchingComponents:triggerDateComponents
+                                                                           repeats:NO];
+    }
+
+    return [UNNotificationRequest requestWithIdentifier:notificationId
+                                                content:content trigger:trigger];
+}
+@end
+
 @interface RNNotifications ()
 @property (nonatomic, strong) NSMutableDictionary *notificationCallbacks;
 @end
@@ -382,7 +417,7 @@ RCT_EXPORT_MODULE()
 
 + (void)emitNotificationActionForIdentifier:(NSString *)identifier responseInfo:(NSDictionary *)responseInfo userInfo:(NSDictionary *)userInfo  completionHandler:(void (^)())completionHandler
 {
-    NSString* completionKey = [NSString stringWithFormat:@"%@.%@", identifier, [NSString stringWithFormat:@"%d", (long)[[NSDate date] timeIntervalSince1970]]];
+    NSString* completionKey = [NSString stringWithFormat:@"%@.%@", identifier, [NSString stringWithFormat:@"%ld", (long)[[NSDate date] timeIntervalSince1970]]];
     NSMutableDictionary* info = [[NSMutableDictionary alloc] initWithDictionary:@{ @"identifier": identifier, @"completionKey": completionKey }];
 
     // add text
@@ -485,7 +520,7 @@ RCT_EXPORT_METHOD(requestPermissionsWithCategories:(NSArray *)json)
 
 RCT_EXPORT_METHOD(log:(NSString *)message)
 {
-    NSLog(message);
+    NSLog(@"%@", message);
 }
 
 RCT_EXPORT_METHOD(completionHandler:(NSString *)completionKey)
@@ -564,7 +599,7 @@ RCT_EXPORT_METHOD(localNotification:(NSDictionary *)notification withId:(NSStrin
         [[UNUserNotificationCenter currentNotificationCenter] addNotificationRequest:localNotification withCompletionHandler:nil];
     } else {
         UILocalNotification* localNotification = [RCTConvert UILocalNotification:notification];
-        NSMutableArray* userInfo = localNotification.userInfo.mutableCopy;
+        NSMutableDictionary* userInfo = localNotification.userInfo.mutableCopy;
         [userInfo setValue:notificationId forKey:@"__id"];
         localNotification.userInfo = userInfo;
 
@@ -636,6 +671,29 @@ RCT_EXPORT_METHOD(removeDeliveredNotifications:(NSArray<NSString *> *)identifier
     UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
     [center removeDeliveredNotificationsWithIdentifiers:identifiers];
   }
+}
+
+static NSDictionary *RCTFormatUNNotification(UNNotification *notification)
+{
+    NSMutableDictionary *formattedNotification = [NSMutableDictionary dictionary];
+    UNNotificationContent *content = notification.request.content;
+
+    formattedNotification[@"identifier"] = notification.request.identifier;
+
+    if (notification.date) {
+        NSDateFormatter *formatter = [NSDateFormatter new];
+        [formatter setDateFormat:@"yyyy-MM-dd'T'HH:mm:ss.SSSZZZZZ"];
+        NSString *dateString = [formatter stringFromDate:notification.date];
+        formattedNotification[@"date"] = dateString;
+    }
+
+    formattedNotification[@"title"] = RCTNullIfNil(content.title);
+    formattedNotification[@"body"] = RCTNullIfNil(content.body);
+    formattedNotification[@"category"] = RCTNullIfNil(content.categoryIdentifier);
+    formattedNotification[@"thread-id"] = RCTNullIfNil(content.threadIdentifier);
+    formattedNotification[@"userInfo"] = RCTNullIfNil(RCTJSONClean(content.userInfo));
+
+    return formattedNotification;
 }
 
 RCT_EXPORT_METHOD(getDeliveredNotifications:(RCTResponseSenderBlock)callback)

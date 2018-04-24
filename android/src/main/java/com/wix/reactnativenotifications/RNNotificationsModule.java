@@ -14,6 +14,7 @@ import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.bridge.Callback;
 import com.wix.reactnativenotifications.core.AppLifecycleFacade;
 import com.wix.reactnativenotifications.core.AppLifecycleFacadeHolder;
 import com.wix.reactnativenotifications.core.InitialNotificationHolder;
@@ -24,6 +25,8 @@ import com.wix.reactnativenotifications.core.notification.PushNotificationProps;
 import com.wix.reactnativenotifications.core.notificationdrawer.IPushNotificationsDrawer;
 import com.wix.reactnativenotifications.core.notificationdrawer.PushNotificationsDrawer;
 import com.wix.reactnativenotifications.gcm.GcmInstanceIdRefreshHandlerService;
+
+import com.google.firebase.iid.FirebaseInstanceId;
 
 import static com.wix.reactnativenotifications.Defs.LOGTAG;
 
@@ -47,16 +50,20 @@ public class RNNotificationsModule extends ReactContextBaseJavaModule implements
     @Override
     public void initialize() {
         Log.d(LOGTAG, "Native module init");
-        startGcmIntentService(GcmInstanceIdRefreshHandlerService.EXTRA_IS_APP_INIT);
+        //startGcmIntentService(GcmInstanceIdRefreshHandlerService.EXTRA_IS_APP_INIT);
 
         final IPushNotificationsDrawer notificationsDrawer = PushNotificationsDrawer.get(getReactApplicationContext().getApplicationContext());
         notificationsDrawer.onAppInit();
+
+        startTokenRefreshService(GcmInstanceIdRefreshHandlerService.ACTION_APP_LAUNCH);
     }
 
     @ReactMethod
     public void refreshToken() {
         Log.d(LOGTAG, "Native method invocation: refreshToken()");
-        startGcmIntentService(GcmInstanceIdRefreshHandlerService.EXTRA_MANUAL_REFRESH);
+        //startGcmIntentService(GcmInstanceIdRefreshHandlerService.EXTRA_MANUAL_REFRESH);
+
+        startTokenRefreshService(GcmInstanceIdRefreshHandlerService.ACTION_MANUAL_REFRESH);
     }
 
     @ReactMethod
@@ -74,6 +81,13 @@ public class RNNotificationsModule extends ReactContextBaseJavaModule implements
         } finally {
             promise.resolve(result);
         }
+    }
+
+    @ReactMethod
+    public void getCurrentToken(Callback callback) {
+        final FirebaseInstanceId firebaseInstanceID = FirebaseInstanceId.getInstance();
+        final String token = firebaseInstanceID.getToken();
+        callback.invoke(token == null ? "" : token);
     }
 
     @ReactMethod
@@ -136,10 +150,18 @@ public class RNNotificationsModule extends ReactContextBaseJavaModule implements
     public void onActivityDestroyed(Activity activity) {
     }
 
+    /*
     protected void startGcmIntentService(String extraFlag) {
         final Context appContext = getReactApplicationContext().getApplicationContext();
         final Intent tokenFetchIntent = new Intent(appContext, GcmInstanceIdRefreshHandlerService.class);
         tokenFetchIntent.putExtra(extraFlag, true);
         appContext.startService(tokenFetchIntent);
+    }
+    */
+    protected void startTokenRefreshService(String action) {
+        final Context appContext = getReactApplicationContext().getApplicationContext();
+        final Intent tokenRefreshIntent = new Intent(appContext, GcmInstanceIdRefreshHandlerService.class);
+        tokenRefreshIntent.setAction(action);
+        appContext.startService(tokenRefreshIntent);
     }
 }

@@ -17,6 +17,8 @@ public class ReactAppLifecycleFacade implements AppLifecycleFacade {
     private Set<AppVisibilityListener> mListeners = new CopyOnWriteArraySet<>();
 
     public void init(ReactContext reactContext) {
+        if (mListeners != null) mListeners.clear();
+        mListeners = new CopyOnWriteArraySet<>();
         mReactContext = reactContext;
         reactContext.addLifecycleEventListener(new LifecycleEventListener() {
             @Override

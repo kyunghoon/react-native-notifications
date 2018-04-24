@@ -31,7 +31,13 @@ export class NotificationsAndroid {
   }
 
   static setRegistrationTokenUpdateListener(listener) {
-    registrationTokenUpdateListener = DeviceEventEmitter.addListener("remoteNotificationsRegistered", listener);
+    RNNotifications.getCurrentToken(token => {
+      if (token) {
+        listener(token);
+      } else {
+        registrationTokenUpdateListener = DeviceEventEmitter.addListener("remoteNotificationsRegistered", listener);
+      }
+    });
   }
 
   static clearRegistrationTokenUpdateListener() {

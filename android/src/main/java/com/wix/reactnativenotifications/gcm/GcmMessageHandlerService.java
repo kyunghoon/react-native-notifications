@@ -19,7 +19,19 @@ public class GcmMessageHandlerService extends FirebaseMessagingService {
             final Bundle bundle = new Bundle();
 
             for (Map.Entry<String, String> entry : remoteMessage.getData().entrySet()) {
-                bundle.putString(entry.getKey(), entry.getValue());
+                String key = entry.getKey();
+                if(key.equals("author")) {
+                    bundle.putString("title", entry.getValue());
+                } else if(key.equals("twi_body")) {
+                    String[] separated = entry.getValue().split(":");
+                    if (separated.length > 1) {
+                        bundle.putString("body", separated[1].trim());
+                    } else {
+                        bundle.putString("body", entry.getValue());
+                    }
+                } else {
+                    bundle.putString(key, entry.getValue());
+                }
             }
 
             final IPushNotification notification = PushNotification.get(getApplicationContext(), bundle);

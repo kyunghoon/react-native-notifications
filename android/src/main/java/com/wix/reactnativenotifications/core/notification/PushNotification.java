@@ -24,7 +24,6 @@ import static com.wix.reactnativenotifications.Defs.NOTIFICATION_RECEIVED_EVENT_
 
 public class PushNotification implements IPushNotification {
 
-    private static final long DEFAULT_VIBRATION = 300L;
     final protected Context mContext;
     final protected AppLifecycleFacade mAppLifecycleFacade;
     final protected AppLaunchHelper mAppLaunchHelper;
@@ -154,15 +153,11 @@ public class PushNotification implements IPushNotification {
             .setSmallIcon(mContext.getApplicationInfo().icon)
             .setContentIntent(intent)
             .setDefaults(Notification.DEFAULT_ALL)
-            .setVibrate(new long[]{0, DEFAULT_VIBRATION})
             .setAutoCancel(true);
          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(CHANNEL_ID,
                                                                   CHANNEL_NAME,
                                                                   NotificationManager.IMPORTANCE_DEFAULT);
-            channel.enableLights(true);
-            channel.enableVibration(true);
-            channel.setVibrationPattern(new long[]{100, 200, 300, 400, 500, 400, 300, 200, 400});
             final NotificationManager notificationManager = (NotificationManager) mContext.getSystemService(Context.NOTIFICATION_SERVICE);
             notificationManager.createNotificationChannel(channel);
             notification.setChannelId(CHANNEL_ID);

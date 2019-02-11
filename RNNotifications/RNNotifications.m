@@ -1,4 +1,3 @@
-
 #import <UIKit/UIKit.h>
 #import <PushKit/PushKit.h>
 #if __has_include(<React/RCTBridge.h>)
@@ -412,7 +411,9 @@ RCT_EXPORT_MODULE()
     UIUserNotificationType types = (UIUserNotificationType) (UIUserNotificationTypeBadge | UIUserNotificationTypeSound | UIUserNotificationTypeAlert);
     UIUserNotificationSettings* settings = [UIUserNotificationSettings settingsForTypes:types categories:categories];
 
-    [[UIApplication sharedApplication] registerUserNotificationSettings:settings];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [[UIApplication sharedApplication] registerUserNotificationSettings:settings];
+    });
 }
 
 + (void)emitNotificationActionForIdentifier:(NSString *)identifier responseInfo:(NSDictionary *)responseInfo userInfo:(NSDictionary *)userInfo  completionHandler:(void (^)())completionHandler
@@ -514,7 +515,7 @@ RCT_EXPORT_METHOD(requestPermissionsWithCategories:(NSArray *)json)
             [categories addObject:[RCTConvert UIMutableUserNotificationCategory:categoryJson]];
         }
     }
-
+    
     [RNNotifications requestPermissionsWithCategories:categories];
 }
 
@@ -551,7 +552,9 @@ RCT_EXPORT_METHOD(registerPushKit)
 
 RCT_EXPORT_METHOD(setBadgesCount:(int)count)
 {
-    [[UIApplication sharedApplication] setApplicationIconBadgeNumber:count];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [[UIApplication sharedApplication] setApplicationIconBadgeNumber:count];
+    });
 }
 
 RCT_EXPORT_METHOD(backgroundTimeRemaining:(RCTResponseSenderBlock)callback)
